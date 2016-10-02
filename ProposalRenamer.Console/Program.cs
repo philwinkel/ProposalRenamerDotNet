@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using NLog;
 
 namespace ProposalRenamer.Console
 {
@@ -14,39 +15,63 @@ namespace ProposalRenamer.Console
         const string source = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Original Files 08082016\\";
         const string dest = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Renamed Files\\";
         static Regex regex = new Regex("(.*)(P(?:MD)?)([0-9]{4,6})");
+        public static Logger logger => LogManager.GetCurrentClassLogger();
 
         static void Main(string[] args)
         {
+            logger.Trace($"Searching for files in {source}");
             var files = Directory.GetFiles(source, "*.*", SearchOption.AllDirectories);
+            logger.Trace($"Found {files.Length} files in {source}!");
+
             var matchFiles = new List<MatchFile>();
             var noMatchFiles = new List<string>();
+            var marylandNoMatchFiles = new List<string>();
+            var virginiaNoMatchFiles = new List<string>();
 
             // go through files, split into matching and non-matching 
+            logger.Trace("Looking at files...");
             foreach (var file in files)
             {
                 Match match = regex.Match(file);
                 if (!match.Success)
                 {
+                    logger.Trace($"NO MATCH: {file}");
                     noMatchFiles.Add(file);
+
+                    if (file.Contains("Maryland"))
+                        marylandNoMatchFiles.Add(file);
+                    else if (file.Contains("Virginia"))
+                        virginiaNoMatchFiles.Add(file);
+
                     continue;
                 }
 
+                logger.Trace($"MATCH: {file}");
+                for(var i = 0; i < match.Groups.Count; i++)
+                {
+                    logger.Trace($"{i} = {match.Groups[i].Value}");
+                }
                 matchFiles.Add(new MatchFile
                 {
                     Filename = file,
                     Date = match.Groups[0].Value,
-                    Type = match.Groups[1].Value,
-                    Proposal = match.Groups[2].Value,
+                    Type = match.Groups[2].Value,
+                    Proposal = match.Groups[3].Value,
                     Ext = Path.GetExtension(file)
                 });
             }
             
-            System.Console.WriteLine($"Found {matchFiles.Count} match files! There were {noMatchFiles.Count} files that did not match.");
+            logger.Info($"Found {matchFiles.Count} match files! There were {noMatchFiles.Count} files that did not match.");
+
+            logger.Info($"Maryland no match files: {marylandNoMatchFiles.Count}");
+            logger.Info($"Virginia no match files: {virginiaNoMatchFiles.Count}");
+            System.Console.ReadKey();
 
             // process match files
+            logger.Info("Copying match files to new directory...");
             foreach (var mf in matchFiles)
             {
-                var destPath = dest;
+                var destPath = $"{dest}";
                 if (mf.Type == "P")
                     destPath += "Virginia\\";
                 else if (mf.Type == "PMD")
@@ -55,16 +80,53 @@ namespace ProposalRenamer.Console
                 var newFileName = mf.Type + mf.Proposal + mf.Ext;
                 var newFilePath = Path.Combine(destPath, newFileName);
 
-                File.Copy(mf.Filename, newFilePath);
-                System.Console.WriteLine($"Copied {mf.Filename} to {newFilePath}");
+                File.Copy(mf.Filename, newFilePath, true);
+                logger.Info($"Copied {mf.Filename} to {newFilePath}");
             }
 
             // copy no match files
-            foreach (var file in noMatchFiles)
+            logger.Info("Copying maryland no match files...");
+            List<string> filesFailedToCopy = new List<string>();
+            int copyErrors = 0;
+            foreach (var file in marylandNoMatchFiles)
             {
-                var destPath = Path.Combine(dest + "\\Manual Rename Required\\" + Path.GetFileName(file));
-                File.Copy(file, destPath);
-                System.Console.WriteLine($"Copied {Path.GetFileName(file)} to {destPath}");
+                var destPath = Path.Combine(dest + "\\Maryland\\Files with no P#\\" + Path.GetFileName(file));
+                logger.Info($"Copied {Path.GetFileName(file)} to {destPath}");
+                try
+                {
+                    File.Copy(file, destPath, true);
+
+                }
+                catch (Exception e)
+                {
+                    logger.Error(e);
+                    filesFailedToCopy.Add(file);
+                    copyErrors++;
+                }
+            }
+            logger.Info("Copying virginia no match files...");
+            foreach (var file in virginiaNoMatchFiles)
+            {
+                var destPath = Path.Combine(dest + "\\Virginia\\Files with no P#\\" + Path.GetFileName(file));
+                logger.Info($"Copying {Path.GetFileName(file)} to {destPath}");
+                try
+                {
+                    File.Copy(file, destPath, true);
+
+                }
+                catch (Exception e)
+                {
+                    logger.Error(e);
+                    filesFailedToCopy.Add(file);
+                    copyErrors++;
+                }
+            }
+            logger.Info("Done");
+            if (copyErrors > 0)
+            {
+                logger.Error("There were {copyErrors} errors, could not copy the following files:");
+                foreach(var f in filesFailedToCopy)
+                    logger.Info(f);
             }
         }
     }

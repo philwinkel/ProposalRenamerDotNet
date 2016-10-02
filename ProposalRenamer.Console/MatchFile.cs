@@ -8,4 +8,10 @@
         public string Proposal { get; set; }
         public string Ext { get; set; }
     }
+
+    class NoMatchFile
+    {
+        public string Filename { get; set; }
+        public string Type { get; set; }
+    }
 }
