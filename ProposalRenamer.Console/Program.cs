@@ -7,18 +7,34 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using NLog;
+using NLog.Internal;
+using ConfigurationManager = System.Configuration.ConfigurationManager;
 
 namespace ProposalRenamer.Console
 {
     class Program
     {
-        const string source = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Original Files 08082016\\";
-        const string dest = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Renamed Files\\";
-        static Regex regex = new Regex("(.*)(P(?:MD)?)([0-9]{4,6})");
+        const string dest = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Britt\\Latest P# October 2016\\Renamed Files";
+        static Regex regex = new Regex("(.*)(P(?:MD)?)([0-9]{4,6}.*\\.)");
         public static Logger logger => LogManager.GetCurrentClassLogger();
 
         static void Main(string[] args)
         {
+            var source = ConfigurationManager.AppSettings["SourcePath"];
+            logger.Trace($"SourcePath = {source}");
+
+            var dest = ConfigurationManager.AppSettings["DestinationPath"];
+            logger.Trace($"DestPath = {dest}");
+
+            if (source == dest)
+            {
+                logger.Info("App.config error - source path and destination path are the same! press any key to exit");
+                return;
+            }
+
+            var regex = new Regex(ConfigurationManager.AppSettings["MatchRegexPattern"]);
+            logger.Trace($"Regex match pattern = ${ConfigurationManager.AppSettings["MatchRegexPattern"]}");
+
             logger.Trace($"Searching for files in {source}");
             var files = Directory.GetFiles(source, "*.*", SearchOption.AllDirectories);
             logger.Trace($"Found {files.Length} files in {source}!");
@@ -56,7 +72,7 @@ namespace ProposalRenamer.Console
                     Filename = file,
                     Date = match.Groups[0].Value,
                     Type = match.Groups[2].Value,
-                    Proposal = match.Groups[3].Value,
+                    Proposal = match.Groups[3].Value + match.Groups[4].Value,
                     Ext = Path.GetExtension(file)
                 });
             }
@@ -65,6 +81,8 @@ namespace ProposalRenamer.Console
 
             logger.Info($"Maryland no match files: {marylandNoMatchFiles.Count}");
             logger.Info($"Virginia no match files: {virginiaNoMatchFiles.Count}");
+
+            System.Console.WriteLine("Push any key to proceed with copying + renaming files.");
             System.Console.ReadKey();
 
             // process match files
@@ -77,7 +95,7 @@ namespace ProposalRenamer.Console
                 else if (mf.Type == "PMD")
                     destPath += "Maryland\\";
 
-                var newFileName = mf.Type + mf.Proposal + mf.Ext;
+                var newFileName = mf.Type + mf.Proposal;
                 var newFilePath = Path.Combine(destPath, newFileName);
 
                 File.Copy(mf.Filename, newFilePath, true);
@@ -91,7 +109,7 @@ namespace ProposalRenamer.Console
             foreach (var file in marylandNoMatchFiles)
             {
                 var destPath = Path.Combine(dest + "\\Maryland\\Files with no P#\\" + Path.GetFileName(file));
-                logger.Info($"Copied {Path.GetFileName(file)} to {destPath}");
+                logger.Info($"Copied {file} to {destPath}");
                 try
                 {
                     File.Copy(file, destPath, true);
@@ -108,7 +126,7 @@ namespace ProposalRenamer.Console
             foreach (var file in virginiaNoMatchFiles)
             {
                 var destPath = Path.Combine(dest + "\\Virginia\\Files with no P#\\" + Path.GetFileName(file));
-                logger.Info($"Copying {Path.GetFileName(file)} to {destPath}");
+                logger.Info($"Copying {file} to {destPath}");
                 try
                 {
                     File.Copy(file, destPath, true);
