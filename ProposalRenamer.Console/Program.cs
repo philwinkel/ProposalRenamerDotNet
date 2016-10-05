@@ -14,8 +14,6 @@ namespace ProposalRenamer.Console
 {
     class Program
     {
-        const string dest = "L:\\Proposals\\Cosential\\P# Proposal Files Upload\\Britt\\Latest P# October 2016\\Renamed Files";
-        static Regex regex = new Regex("(.*)(P(?:MD)?)([0-9]{4,6}.*\\.)");
         public static Logger logger => LogManager.GetCurrentClassLogger();
 
         static void Main(string[] args)
